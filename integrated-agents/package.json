@@ -1,0 +1,37 @@
+{
+  "name": "integrated-agents",
+  "version": "1.0.0",
+  "description": "Integrated AI Agent Orchestration System with 337 specialized agents",
+  "type": "module",
+  "main": "orchestrator.js",
+  "bin": {
+    "agents": "./orchestrator.js"
+  },
+  "scripts": {
+    "start": "node orchestrator.js",
+    "task": "node orchestrator.js",
+    "setup": "node setup.js",
+    "test": "node test-orchestrator.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "openai": "^4.77.3",
+    "@google/generative-ai": "^0.21.0",
+    "dotenv": "^16.4.7",
+    "chalk": "^5.3.0",
+    "ora": "^8.1.1",
+    "inquirer": "^12.3.0",
+    "fs-extra": "^11.2.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "orchestration",
+    "claude",
+    "openai",
+    "gemini",
+    "automation"
+  ],
+  "author": "Integrated Agents",
+  "license": "MIT"
+}

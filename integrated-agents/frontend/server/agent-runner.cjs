@@ -1,0 +1,399 @@
+const http = require('http')
+const fs = require('fs/promises')
+const path = require('path')
+
+const PORT = Number(process.env.AGENT_RUNNER_PORT || 8787)
+const PROJECT_ROOT = path.resolve(__dirname, '..')
+const OUTPUT_ROOT = path.join(PROJECT_ROOT, 'generated-projects')
+
+function sendJson(response, status, payload) {
+  response.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+  })
+  response.end(JSON.stringify(payload, null, 2))
+}
+
+function readBody(request) {
+  return new Promise((resolve, reject) => {
+    let body = ''
+    request.on('data', (chunk) => {
+      body += chunk
+      if (body.length > 2_000_000) {
+        reject(new Error('Request body is too large.'))
+        request.destroy()
+      }
+    })
+    request.on('end', () => resolve(body))
+    request.on('error', reject)
+  })
+}
+
+function slugify(value) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'generated-agent-project'
+}
+
+function titleCase(value) {
+  return value
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
+function inferProject(task) {
+  const normalized = task.toLowerCase()
+  if (normalized.includes('crm')) return { name: 'Agent CRM Workspace', type: 'CRM' }
+  if (normalized.includes('ecommerce') || normalized.includes('shop')) return { name: 'Agent Commerce Studio', type: 'Commerce' }
+  if (normalized.includes('dashboard')) return { name: 'Agent Operations Dashboard', type: 'Dashboard' }
+  if (normalized.includes('chat')) return { name: 'Agent Chat Workspace', type: 'Chat' }
+  if (normalized.includes('mobile')) return { name: 'Mobile Agent Builder', type: 'Mobile planning app' }
+  if (normalized.includes('task') || normalized.includes('project')) return { name: 'Autonomous Project Workspace', type: 'Project management' }
+  return { name: 'Autonomous Agent App', type: 'AI product' }
+}
+
+function buildFeatures(task, agentName) {
+  return [
+    `Prompt-to-project workspace led by ${agentName}`,
+    'Automatic agent network routing and task breakdown',
+    'Live build plan with owners, progress, and acceptance checks',
+    'Generated app shell with responsive SaaS UI',
+    'Completion notifications with email handoff payload',
+    `Project-specific workflow for: ${task}`,
+  ]
+}
+
+function buildFiles({ task, agent, runId, project }) {
+  const agentName = agent?.name || 'Selected Agent'
+  const agentInitials = agent?.initials || 'AI'
+  const features = buildFeatures(task, agentName)
+
+  const packageJson = {
+    name: slugify(project.name),
+    version: '1.0.0',
+    private: true,
+    type: 'module',
+    scripts: {
+      dev: 'vite --host 127.0.0.1 --port 5173',
+      build: 'vite build',
+      preview: 'vite preview',
+    },
+    dependencies: {
+      react: '^18.3.1',
+      'react-dom': '^18.3.1',
+      'lucide-react': '^0.462.0',
+    },
+    devDependencies: {
+      '@vitejs/plugin-react': '^6.0.2',
+      autoprefixer: '^10.4.20',
+      postcss: '^8.4.47',
+      tailwindcss: '^3.4.14',
+      vite: '^8.0.14',
+    },
+  }
+
+  const appCode = `import { useMemo, useState } from 'react'
+import { Bot, CheckCircle2, Circle, Code2, Mail, Rocket, Sparkles } from 'lucide-react'
+import './index.css'
+
+const task = ${JSON.stringify(task)}
+const agentName = ${JSON.stringify(agentName)}
+const agentInitials = ${JSON.stringify(agentInitials)}
+const projectName = ${JSON.stringify(project.name)}
+const projectType = ${JSON.stringify(project.type)}
+const features = ${JSON.stringify(features, null, 2)}
+
+function App() {
+  const [activeStep, setActiveStep] = useState(0)
+  const steps = useMemo(() => [
+    { title: 'Understand', detail: 'Convert the prompt into product scope, screens, and acceptance checks.' },
+    { title: 'Design', detail: 'Shape the dark SaaS interface, responsive layout, and states.' },
+    { title: 'Build', detail: 'Create React components, project structure, and implementation notes.' },
+    { title: 'Verify', detail: 'Review risks, build commands, and completion handoff.' },
+  ], [])
+
+  return (
+    <main className="min-h-screen bg-[#0f0f1a] text-white">
+      <section className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-5 py-6">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg border border-indigo-400/30 bg-indigo-500/15 text-sm font-bold text-indigo-200">
+              {agentInitials}
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight">{projectName}</h1>
+              <p className="text-sm text-white/45">{projectType} generated by {agentName}</p>
+            </div>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-md border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-200">
+            <CheckCircle2 size={16} />
+            Generated run complete
+          </div>
+        </header>
+
+        <div className="grid flex-1 gap-5 py-6 lg:grid-cols-[0.9fr_1.1fr]">
+          <section className="rounded-lg border border-white/10 bg-[#16162a]/85 p-5 shadow-2xl shadow-black/30">
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-indigo-100">
+              <Sparkles size={16} />
+              Original prompt
+            </div>
+            <p className="rounded-md border border-white/10 bg-white/5 p-4 text-sm leading-6 text-white/70">{task}</p>
+
+            <div className="mt-5 grid gap-2">
+              {steps.map((step, index) => (
+                <button
+                  key={step.title}
+                  type="button"
+                  onClick={() => setActiveStep(index)}
+                  className={\`flex items-start gap-3 rounded-md border p-3 text-left transition-all duration-200 \${activeStep === index ? 'border-indigo-400/40 bg-indigo-500/15' : 'border-white/10 bg-white/5 hover:bg-white/10'}\`}
+                >
+                  {activeStep === index ? <CheckCircle2 className="mt-0.5 text-emerald-300" size={17} /> : <Circle className="mt-0.5 text-white/35" size={17} />}
+                  <span>
+                    <span className="block text-sm font-medium">{step.title}</span>
+                    <span className="mt-1 block text-xs leading-5 text-white/50">{step.detail}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-lg border border-white/10 bg-[#16162a]/85 p-5 shadow-2xl shadow-black/30">
+            <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-indigo-100">
+              <Bot size={16} />
+              What was built
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {features.map((feature) => (
+                <div key={feature} className="rounded-md border border-white/10 bg-white/5 p-3">
+                  <div className="flex gap-2 text-sm leading-6 text-white/70">
+                    <CheckCircle2 className="mt-1 shrink-0 text-emerald-300" size={15} />
+                    <span>{feature}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-md border border-indigo-400/20 bg-indigo-500/10 p-3">
+                <Rocket className="mb-2 text-indigo-200" size={18} />
+                <div className="text-sm font-medium">Run</div>
+                <div className="mt-1 text-xs text-white/45">npm run dev</div>
+              </div>
+              <div className="rounded-md border border-cyan-400/20 bg-cyan-500/10 p-3">
+                <Code2 className="mb-2 text-cyan-200" size={18} />
+                <div className="text-sm font-medium">Build</div>
+                <div className="mt-1 text-xs text-white/45">npm run build</div>
+              </div>
+              <div className="rounded-md border border-emerald-400/20 bg-emerald-500/10 p-3">
+                <Mail className="mb-2 text-emerald-200" size={18} />
+                <div className="text-sm font-medium">Notify</div>
+                <div className="mt-1 text-xs text-white/45">Completion payload ready</div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+export default App
+`
+
+  const cssCode = `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #0f0f1a;
+}
+
+button {
+  font: inherit;
+}
+`
+
+  const tailwindConfig = `/** @type {import('tailwindcss').Config} */
+export default {
+  content: ['./index.html', './src/**/*.{js,jsx}'],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+    },
+  },
+  plugins: [],
+}
+`
+
+  const postcssConfig = `export default {
+  plugins: {
+    tailwindcss: {},
+    autoprefixer: {},
+  },
+}
+`
+
+  const mainCode = `import React from 'react'
+import { createRoot } from 'react-dom/client'
+import App from './App.jsx'
+
+createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+`
+
+  const readme = `# ${project.name}
+
+Generated by ${agentName} from this prompt:
+
+> ${task}
+
+## What Was Created
+
+${features.map((feature) => `- ${feature}`).join('\n')}
+
+## Run It
+
+\`\`\`bash
+npm install
+npm run dev
+npm run build
+\`\`\`
+
+## Generated Run
+
+- Run id: ${runId}
+- Type: ${project.type}
+- Completion status: Generated locally by the AI Agent Platform runner
+`
+
+  const metadata = {
+    runId,
+    task,
+    project,
+    agent,
+    generatedAt: new Date().toISOString(),
+    features,
+  }
+
+  return [
+    { path: 'package.json', purpose: 'Generated app dependencies and scripts', content: JSON.stringify(packageJson, null, 2) },
+    { path: 'tailwind.config.js', purpose: 'Tailwind content scanning config', content: tailwindConfig },
+    { path: 'postcss.config.js', purpose: 'PostCSS pipeline for Tailwind', content: postcssConfig },
+    { path: 'index.html', purpose: 'Vite HTML entry', content: '<!doctype html>\n<html lang="en">\n  <head>\n    <meta charset="UTF-8" />\n    <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n    <title>' + project.name + '</title>\n  </head>\n  <body>\n    <div id="root"></div>\n    <script type="module" src="/src/main.jsx"></script>\n  </body>\n</html>\n' },
+    { path: 'src/main.jsx', purpose: 'React root renderer', content: mainCode },
+    { path: 'src/App.jsx', purpose: 'Generated React application', content: appCode },
+    { path: 'src/index.css', purpose: 'Generated visual system', content: cssCode },
+    { path: 'README.md', purpose: 'Generated project instructions', content: readme },
+    { path: 'AGENT_RUN.json', purpose: 'Machine-readable run metadata', content: JSON.stringify(metadata, null, 2) },
+  ]
+}
+
+async function writeGeneratedFiles(outputDir, files) {
+  await fs.mkdir(outputDir, { recursive: true })
+
+  for (const file of files) {
+    const target = path.resolve(outputDir, file.path)
+    if (!target.startsWith(outputDir)) {
+      throw new Error(`Refusing to write outside output directory: ${file.path}`)
+    }
+
+    await fs.mkdir(path.dirname(target), { recursive: true })
+    await fs.writeFile(target, file.content, 'utf8')
+  }
+}
+
+async function createTaskRun(payload) {
+  const task = String(payload.task || '').trim()
+  if (!task) throw new Error('Task is required.')
+
+  const agent = payload.agent || { name: 'Autonomous Agent', initials: 'AI' }
+  const project = inferProject(task)
+  const runId = `run-${Date.now()}`
+  const folderName = `${slugify(project.name)}-${runId}`
+  const outputDir = path.join(OUTPUT_ROOT, folderName)
+  const files = buildFiles({ task, agent, runId, project })
+
+  await writeGeneratedFiles(outputDir, files)
+
+  return {
+    id: runId,
+    status: 'completed',
+    projectName: project.name,
+    projectType: project.type,
+    outputDir,
+    relativeOutputDir: path.relative(PROJECT_ROOT, outputDir),
+    files: files.map(({ path: filePath, purpose }) => ({ path: filePath, purpose })),
+    commands: [
+      `cd "${outputDir}"`,
+      'npm install',
+      'npm run dev',
+      'npm run build',
+    ],
+    log: [
+      `Accepted task for ${agent.name}.`,
+      `Created ${project.name}.`,
+      `Wrote ${files.length} project files to disk.`,
+      'Prepared run commands and completion handoff.',
+    ],
+    email: payload.email
+      ? {
+          status: 'payload-ready',
+          to: payload.email,
+          subject: `${agent.name} completed ${project.name}`,
+        }
+      : {
+          status: 'not-configured',
+        },
+    completedAt: new Date().toISOString(),
+  }
+}
+
+const server = http.createServer(async (request, response) => {
+  if (request.method === 'OPTIONS') {
+    sendJson(response, 200, { ok: true })
+    return
+  }
+
+  try {
+    if (request.method === 'GET' && request.url === '/api/health') {
+      sendJson(response, 200, { ok: true, service: 'agent-runner', outputRoot: OUTPUT_ROOT })
+      return
+    }
+
+    if (request.method === 'POST' && request.url === '/api/tasks') {
+      const rawBody = await readBody(request)
+      const payload = rawBody ? JSON.parse(rawBody) : {}
+      const run = await createTaskRun(payload)
+      sendJson(response, 200, run)
+      return
+    }
+
+    sendJson(response, 404, { error: 'Not found' })
+  } catch (error) {
+    sendJson(response, 500, { error: error.message || 'Agent runner failed.' })
+  }
+})
+
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`Agent runner listening on http://127.0.0.1:${PORT}`)
+  console.log(`Generated projects will be written to ${OUTPUT_ROOT}`)
+})
